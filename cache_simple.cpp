@@ -41,25 +41,8 @@ class CacheBlock {
 };
 
 
-// set = list of blocks
-// each block has fields - valid, repl count, data 
 
-// LOAD
-// 1. insert a block 
-    //if hit - read
-    //if miss - 
-        // find empty spot - add
-        // find invalid entries - add
-        // find victim - add
-// 2. delete a block
-        // if invalid - delete
-        // if victim - delete
-// 3. invalidate a block - valid = 0
-    //
-// 4. find victim
-// 5. remove invalid blocks - valid = 0
-
-// Should I create another class for reporting Misses - Conflict, Compulsory, Capacity and Hits
+// Should I create another class for reporting Misses - Conflict, Compulsory, Capacity and Hits? - TODO
 
 template <uint32_t BlockSize>
 class Cache {
