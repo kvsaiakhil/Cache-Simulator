@@ -106,9 +106,11 @@ The completed project must support:
 
 Current implementation status:
 - The repository now includes `L1`, `L2`, and `L3` hierarchy support.
+- The repository also includes an optional victim cache between `L1` and `L2`.
 
 Required hierarchy behavior:
 - `L1` miss may access `L2`
+- An enabled victim cache may satisfy an `L1` miss before `L2` is probed
 - `L2` miss may access memory or a modeled backing store
 - Dirty eviction from an upper level must be forwarded correctly
 - Statistics must identify activity per level
@@ -137,6 +139,22 @@ Required semantics:
 - Exclusive: a block should exist in only one cache level at a time
 - Non-inclusive: no containment rule is enforced
 
+### 3.8.1 Victim Cache
+
+The simulator should support an optional victim cache attached to `L1`.
+
+Current implementation status:
+- The repository now supports an optional victim cache configured by:
+  - enabled/disabled
+  - number of entries
+  - replacement policy
+
+Required semantics:
+- The victim cache acts as a small fully associative buffer for recently evicted `L1` lines
+- `L1` misses should probe the victim cache before `L2`
+- If the victim cache is enabled, `L1` evictions should enter the victim cache before being sent lower
+- If the victim cache overflows, the evicted victim line must be forwarded correctly according to hierarchy policy and write policy
+
 ### 3.9 Statistics
 
 The simulator must collect at minimum:
@@ -155,6 +173,7 @@ The simulator must collect at minimum:
 Current implementation status:
 - The repository now reports compulsory, capacity, and conflict misses using a
   same-capacity fully associative LRU shadow model for classification.
+- The repository now also reports victim-cache statistics when the victim cache is enabled.
 
 Per-level statistics are mandatory once `L2` is introduced.
 
@@ -220,7 +239,6 @@ These are explicitly out of the mandatory baseline but should remain possible to
 - Separate `L1I` and `L1D`
 - Unified `L2`
 - Shared `L3`
-- Victim cache
 - Sectored cache
 - Write buffer
 - Banked cache

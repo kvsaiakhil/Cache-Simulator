@@ -33,11 +33,18 @@ struct CacheConfig {
     ReplacementPolicyType replacement_policy;
 };
 
+struct VictimCacheConfig {
+    bool enabled = false;
+    uint32_t entries = 0;
+    ReplacementPolicyType replacement_policy = ReplacementPolicyType::LRU;
+};
+
 struct HierarchyConfig {
     CacheConfig l1;
     CacheConfig l2;
     CacheConfig l3;
     InclusionPolicy inclusion_policy;
+    VictimCacheConfig victim_cache{};
 };
 
 #endif

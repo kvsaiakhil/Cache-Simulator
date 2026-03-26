@@ -4,10 +4,46 @@ A modular C++ cache simulator for experimenting with cache hierarchy behavior, r
 
 The project currently supports a three-level cache hierarchy (`L1`, `L2`, `L3`) with configurable hierarchy mode, trace replay, miss classification, and automated tests. It is structured as an extensible simulator rather than a one-file demo, so it can keep growing toward a more complete architecture study tool.
 
+## Top-Level Architecture
+
+```mermaid
+flowchart LR
+    Trace["Trace File / Built-in Driver"] --> Runner["TraceRunner / CLI"]
+    Runner --> Hier["CacheHierarchy"]
+
+    subgraph Top["Top-Level Simulator"]
+        Hier --> L1["L1 Cache"]
+        L1 --> VC["Victim Cache (Optional)"]
+        VC --> L2["L2 Cache"]
+        L2 --> L3["L3 Cache"]
+        L3 --> Mem["Backing Store / Memory"]
+    end
+
+    Config["HierarchyConfig"] --> Hier
+    Config --> L1
+    Config --> VC
+    Config --> L2
+    Config --> L3
+
+    Stats["Per-Level Stats + CSV/JSON Export"] --> Runner
+    L1 --> Stats
+    VC --> Stats
+    L2 --> Stats
+    L3 --> Stats
+```
+
+At a high level:
+- the CLI or trace runner drives accesses into the hierarchy
+- `L1` is the primary fast cache
+- the victim cache, when enabled, buffers recent `L1` evictions before they fall through to `L2`
+- `L2` and `L3` provide deeper capacity
+- the backing store services lines that miss in all cache levels
+
 ## What This Project Supports Today
 
 ### Cache hierarchy
 - `L1`, `L2`, and `L3`
+- Optional victim cache between `L1` and `L2`
 - Backing memory model behind `L3`
 - Inclusive hierarchy
 - Exclusive hierarchy
@@ -37,6 +73,7 @@ The simulator currently enforces the same write policy and write-miss policy acr
 - Per-level read hits and misses
 - Per-level write hits and misses
 - Per-level writebacks
+- Victim-cache stats when enabled
 - `L1` compulsory misses
 - `L1` capacity misses
 - `L1` conflict misses
@@ -72,7 +109,7 @@ make test
 ## Command-Line Usage
 
 ```bash
-./build/cache_sim [trace_file] [inclusion_policy] [write_policy|export_format] [export_format]
+./build/cache_sim [trace_file] [inclusion_policy] [options...]
 ```
 
 Arguments:
@@ -91,10 +128,19 @@ Arguments:
   - `write-through`
   - `writethrough`
   - `wt`
+- `victim_cache`
+  One of:
+  - `vc=off`
+  - `vc=<entries>`
+  - `vc=<entries>:lru`
+  - `vc=<entries>:fifo`
+  - `vc=<entries>:random`
 - `export_format`
   One of:
   - `csv`
   - `json`
+
+The optional arguments after `inclusion_policy` can be provided in any order.
 
 ### Example commands
 
@@ -105,9 +151,11 @@ Arguments:
 ./build/cache_sim traces/tiny/sample_trace.txt non-inclusive
 ./build/cache_sim traces/tiny/sample_trace.txt inclusive write-back
 ./build/cache_sim traces/tiny/sample_trace.txt inclusive write-through
+./build/cache_sim traces/tiny/sample_trace.txt inclusive vc=2
+./build/cache_sim traces/tiny/sample_trace.txt inclusive vc=4:fifo
 ./build/cache_sim traces/tiny/sample_trace.txt inclusive csv
 ./build/cache_sim traces/tiny/sample_trace.txt inclusive json
-./build/cache_sim traces/tiny/sample_trace.txt inclusive write-through json
+./build/cache_sim traces/tiny/sample_trace.txt inclusive write-through vc=2:lru json
 ```
 
 ## Trace Format
@@ -158,10 +206,12 @@ The command-line driver in [src/main.cpp](src/main.cpp) currently instantiates:
 - `L2`: `128` bytes, `2`-way
 - `L3`: `256` bytes, `4`-way
 - Replacement policy: `LRU`
+- Victim cache: disabled by default
 
 The CLI currently changes:
 - hierarchy mode
 - write mode
+- victim-cache size and replacement policy
 - export format
 
 The cache sizes and replacement policy used by the main executable are still hardcoded in the driver for now.
@@ -178,11 +228,13 @@ W 0x0 <- 1 (hit)
 
 operations=2 loads=1 stores=1
 L1 read_hits=0 read_misses=1 write_hits=1 write_misses=0 writebacks=0 compulsory_misses=1 capacity_misses=0 conflict_misses=0
+VC read_hits=0 read_misses=0 write_hits=0 write_misses=0 writebacks=0
 L2 read_hits=0 read_misses=1 write_hits=0 write_misses=0 writebacks=0
 L3 read_hits=0 read_misses=1 write_hits=0 write_misses=0 writebacks=0
 ```
 
 If `csv` or `json` is requested, that export is printed after the human-readable summary.
+If the victim cache is disabled, the `VC` line is omitted.
 
 ## Included Trace Workloads
 
@@ -240,6 +292,8 @@ build/                    Generated binaries from the Makefile
   Umbrella include for the main public types.
 - [include/cache_simulator/l1_cache.hpp](include/cache_simulator/l1_cache.hpp)
   Core cache-level implementation.
+- [include/cache_simulator/victim_cache.hpp](include/cache_simulator/victim_cache.hpp)
+  Optional fully associative victim cache for recently evicted `L1` lines.
 - [include/cache_simulator/cache_hierarchy.hpp](include/cache_simulator/cache_hierarchy.hpp)
   Three-level hierarchy controller.
 - [include/cache_simulator/cache_set.hpp](include/cache_simulator/cache_set.hpp)
@@ -267,6 +321,7 @@ The project currently uses a small [Makefile](Makefile) and GitHub Actions CI:
 ## Current Limitations
 
 - The executable uses fixed cache sizes and `LRU` in `main.cpp`
+- The executable uses fixed `L1/L2/L3` sizes in `main.cpp`
 - Block size is compile-time fixed in the instantiated cache type
 - Lower-level stats still include hierarchy-internal activity, so they are not yet cleanly separated into demand traffic vs internal refill/writeback traffic
 - `L2` and `L3` currently reuse the same cache-level implementation rather than having fully separate level-specific classes

@@ -3,6 +3,7 @@
 
 #include "cache_simulator/cache_config.hpp"
 #include "cache_simulator/l1_cache.hpp"
+#include "cache_simulator/victim_cache.hpp"
 
 #include <cstdint>
 #include <sstream>
@@ -43,12 +44,14 @@ class CacheHierarchy : public CacheBase {
 public:
     using LineSnapshot = CacheLineSnapshot<BlockSizeBytes>;
     using EvictionInfo = typename L1Cache<BlockSizeBytes>::EvictionInfo;
+    using VictimEvictionInfo = typename VictimCache<BlockSizeBytes>::EvictionInfo;
 
     explicit CacheHierarchy(const HierarchyConfig& config)
         : config_(config),
           l1_(config.l1),
           l2_(config.l2),
           l3_(config.l3),
+          victim_cache_(config.victim_cache),
           memory_() {
         validate_policy_matrix();
     }
@@ -59,6 +62,13 @@ public:
         }
 
         LineSnapshot snapshot{};
+        if (victim_cache_.access_load(byte_address, value)) {
+            take_from_victim_or_throw(byte_address, snapshot);
+            insert_into_l1_cluster(byte_address, snapshot);
+            value = l1_.read_word_from_cache(byte_address);
+            return false;
+        }
+
         if (l2_.access_load(byte_address, value)) {
             require_snapshot(l2_, byte_address, snapshot);
             if (config_.inclusion_policy == InclusionPolicy::Exclusive) {
@@ -110,17 +120,22 @@ public:
     }
 
     uint64_t writebacks() const override {
-        return l1_.writebacks() + l2_.writebacks() + l3_.writebacks();
+        return l1_.writebacks() + victim_cache_.writebacks() + l2_.writebacks() + l3_.writebacks();
     }
 
     const L1Cache<BlockSizeBytes>& l1() const { return l1_; }
+    const VictimCache<BlockSizeBytes>& victim_cache() const { return victim_cache_; }
     const L2Cache<BlockSizeBytes>& l2() const { return l2_; }
     const L3Cache<BlockSizeBytes>& l3() const { return l3_; }
 
     std::string stats_csv() const {
         std::ostringstream os;
         os << CacheStats::csv_header() << "\n"
-           << l1_.stats().to_csv_row("L1") << "\n"
+           << l1_.stats().to_csv_row("L1");
+        if (victim_cache_.enabled()) {
+            os << "\n" << victim_cache_.stats().to_csv_row("VC");
+        }
+        os << "\n"
            << l2_.stats().to_csv_row("L2") << "\n"
            << l3_.stats().to_csv_row("L3");
         return os.str();
@@ -129,7 +144,11 @@ public:
     std::string stats_json() const {
         std::ostringstream os;
         os << "{"
-           << l1_.stats().to_json("L1") << ","
+           << l1_.stats().to_json("L1");
+        if (victim_cache_.enabled()) {
+            os << "," << victim_cache_.stats().to_json("VC");
+        }
+        os << ","
            << l2_.stats().to_json("L2") << ","
            << l3_.stats().to_json("L3")
            << "}";
@@ -139,6 +158,10 @@ public:
     void debug_print(std::ostream& os) const override {
         os << "=== L1 ===\n";
         l1_.debug_print(os);
+        if (victim_cache_.enabled()) {
+            os << "=== VC ===\n";
+            victim_cache_.debug_print(os);
+        }
         os << "=== L2 ===\n";
         l2_.debug_print(os);
         os << "=== L3 ===\n";
@@ -152,6 +175,12 @@ private:
         }
 
         LineSnapshot snapshot{};
+        if (victim_cache_.access_store(byte_address, value, /*dirty=*/true)) {
+            take_from_victim_or_throw(byte_address, snapshot);
+            insert_into_l1_cluster(byte_address, snapshot);
+            return false;
+        }
+
         bool found = false;
         int source_level = 0;
         uint32_t ignored = 0;
@@ -185,6 +214,14 @@ private:
         if (l1_.access_store(byte_address, value)) {
             propagate_write_through_hit(byte_address, value);
             return true;
+        }
+
+        LineSnapshot snapshot{};
+        if (victim_cache_.access_store(byte_address, value, /*dirty=*/false)) {
+            take_from_victim_or_throw(byte_address, snapshot);
+            insert_into_l1_cluster(byte_address, snapshot);
+            propagate_write_through_hit(byte_address, value);
+            return false;
         }
 
         bool lower_level_hit = false;
@@ -246,6 +283,12 @@ private:
         }
     }
 
+    void take_from_victim_or_throw(uint32_t byte_address, LineSnapshot& snapshot) {
+        if (!victim_cache_.remove_line(byte_address, snapshot)) {
+            throw std::runtime_error("Hierarchy expected resident victim cache line");
+        }
+    }
+
     void fill_upper_levels(uint32_t byte_address, const LineSnapshot& snapshot, int source_level) {
         if (config_.inclusion_policy == InclusionPolicy::Inclusive) {
             if (source_level == 0) {
@@ -254,7 +297,7 @@ private:
             if (source_level == 0 || source_level == 3) {
                 insert_into_level(l2_, byte_address, snapshot, &l3_, nullptr);
             }
-            insert_into_level(l1_, byte_address, snapshot, &l2_, &l3_);
+            insert_into_l1_cluster(byte_address, snapshot);
             return;
         }
 
@@ -265,12 +308,71 @@ private:
             if (source_level == 0 || source_level == 3) {
                 insert_into_level(l2_, byte_address, snapshot, &l3_, nullptr);
             }
-            insert_into_level(l1_, byte_address, snapshot, &l2_, &l3_);
+            insert_into_l1_cluster(byte_address, snapshot);
             return;
         }
 
         // Exclusive
-        insert_into_level(l1_, byte_address, snapshot, &l2_, &l3_);
+        insert_into_l1_cluster(byte_address, snapshot);
+    }
+
+    void insert_into_l1_cluster(uint32_t byte_address, const LineSnapshot& snapshot) {
+        EvictionInfo l1_eviction{};
+        l1_.insert_or_update_line(byte_address, snapshot, &l1_eviction);
+        if (!l1_eviction.valid) {
+            return;
+        }
+
+        if (victim_cache_.enabled()) {
+            VictimEvictionInfo victim_eviction{};
+            victim_cache_.insert_or_update_line(l1_eviction.block_address * BlockSizeBytes,
+                                                l1_eviction.snapshot,
+                                                &victim_eviction);
+            if (victim_eviction.valid) {
+                handle_top_cluster_eviction(victim_eviction.block_address,
+                                            victim_eviction.snapshot);
+            }
+            return;
+        }
+
+        handle_top_cluster_eviction(l1_eviction.block_address, l1_eviction.snapshot);
+    }
+
+    void handle_top_cluster_eviction(uint32_t evicted_block_address,
+                                     const LineSnapshot& snapshot) {
+        if (config_.inclusion_policy == InclusionPolicy::Exclusive) {
+            demote_top_cluster_line(evicted_block_address, snapshot);
+            return;
+        }
+
+        if (snapshot.dirty) {
+            insert_into_level(l2_, evicted_block_address * BlockSizeBytes, snapshot, &l3_, nullptr);
+        }
+    }
+
+    void demote_top_cluster_line(uint32_t evicted_block_address,
+                                 const LineSnapshot& snapshot) {
+        EvictionInfo demoted{};
+        l2_.insert_or_update_line(evicted_block_address * BlockSizeBytes, snapshot, &demoted);
+        if (!demoted.valid) {
+            return;
+        }
+
+        EvictionInfo demoted_to_final{};
+        l3_.insert_or_update_line(demoted.block_address * BlockSizeBytes,
+                                  demoted.snapshot,
+                                  &demoted_to_final);
+        if (demoted_to_final.valid && demoted_to_final.snapshot.dirty) {
+            memory_.store_line(demoted_to_final.block_address, demoted_to_final.snapshot);
+        }
+    }
+
+    void invalidate_upper_cluster_line(uint32_t byte_address) {
+        LineSnapshot discarded{};
+        l1_.remove_line(byte_address, discarded);
+        if (victim_cache_.enabled()) {
+            victim_cache_.remove_line(byte_address, discarded);
+        }
     }
 
     void insert_into_level(L1Cache<BlockSizeBytes>& target,
@@ -287,9 +389,9 @@ private:
         if (config_.inclusion_policy == InclusionPolicy::Inclusive) {
             if (&target == &l3_) {
                 l2_.remove_line(eviction.block_address * BlockSizeBytes, eviction.snapshot);
-                l1_.remove_line(eviction.block_address * BlockSizeBytes, eviction.snapshot);
+                invalidate_upper_cluster_line(eviction.block_address * BlockSizeBytes);
             } else if (&target == &l2_) {
-                l1_.remove_line(eviction.block_address * BlockSizeBytes, eviction.snapshot);
+                invalidate_upper_cluster_line(eviction.block_address * BlockSizeBytes);
             }
             if (eviction.snapshot.dirty) {
                 propagate_dirty_eviction(target, eviction.block_address, eviction.snapshot);
@@ -411,6 +513,7 @@ private:
     L1Cache<BlockSizeBytes> l1_;
     L2Cache<BlockSizeBytes> l2_;
     L3Cache<BlockSizeBytes> l3_;
+    VictimCache<BlockSizeBytes> victim_cache_;
     BackingStore<BlockSizeBytes> memory_;
 };
 

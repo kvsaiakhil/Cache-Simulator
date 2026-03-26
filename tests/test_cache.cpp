@@ -492,6 +492,67 @@ void test_noninclusive_hierarchy_does_not_force_invalidation() {
                 "Non-inclusive hierarchy does not require L3 to retain the upper-level line");
 }
 
+void test_victim_cache_recovers_recent_l1_eviction() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{128, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{256, 4, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Inclusive,
+        VictimCacheConfig{true, 1, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    uint32_t value = 0;
+    expect_true(!hierarchy.load(0x00, value), "First load should miss");
+    expect_true(!hierarchy.load(0x20, value), "Second load should miss");
+    expect_true(!hierarchy.load(0x40, value), "Third load should evict one line from L1");
+
+    expect_true(!hierarchy.l1().contains_line(0x00),
+                "Evicted L1 line should leave the primary cache");
+    expect_true(hierarchy.victim_cache().contains_line(0x00),
+                "Victim cache should capture the most recent L1 eviction");
+
+    expect_true(!hierarchy.load(0x00, value),
+                "Victim cache hit should still be an L1 miss overall");
+    expect_true(hierarchy.l1().contains_line(0x00),
+                "Victim cache hit should promote the line back into L1");
+    expect_true(hierarchy.victim_cache().contains_line(0x20),
+                "Victim cache should receive the displaced L1 line during the swap");
+    expect_equal_u64(hierarchy.victim_cache().read_hits(), 1,
+                     "Victim cache should record the rescue hit");
+}
+
+void test_victim_cache_eviction_demotes_in_exclusive_mode() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{64, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{128, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Exclusive,
+        VictimCacheConfig{true, 1, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    uint32_t value = 0;
+    expect_true(!hierarchy.load(0x00, value), "First exclusive load should miss");
+    expect_true(!hierarchy.load(0x20, value), "Second exclusive load should miss");
+    expect_true(!hierarchy.load(0x40, value), "Third exclusive load should place one line in victim cache");
+    expect_true(!hierarchy.load(0x60, value),
+                "Fourth exclusive load should force victim-cache eviction");
+
+    expect_true(!hierarchy.l1().contains_line(0x00),
+                "Oldest line should not remain in L1 after victim-cache overflow");
+    expect_true(!hierarchy.victim_cache().contains_line(0x00),
+                "Oldest line should have left the victim cache after overflow");
+    expect_true(hierarchy.l2().contains_line(0x00),
+                "Victim-cache eviction should demote the line into L2 in exclusive mode");
+}
+
 void test_hierarchy_stats_csv_export_contains_all_levels() {
     constexpr uint32_t kBlockSizeBytes = 16;
     const HierarchyConfig config{
@@ -717,6 +778,8 @@ int main() {
         test_inclusive_hierarchy_keeps_block_in_lower_levels,
         test_exclusive_hierarchy_moves_lines_between_levels,
         test_noninclusive_hierarchy_does_not_force_invalidation,
+        test_victim_cache_recovers_recent_l1_eviction,
+        test_victim_cache_eviction_demotes_in_exclusive_mode,
         test_hierarchy_stats_csv_export_contains_all_levels,
         test_hierarchy_stats_json_export_contains_all_levels,
         test_hierarchy_rejects_unsupported_writeback_no_write_allocate,
