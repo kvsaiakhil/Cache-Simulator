@@ -1,0 +1,13 @@
+R 0x0 -> 0 (miss)
+R 0x20 -> 0 (miss)
+R 0x40 -> 0 (miss)
+R 0x0 -> 0 (miss)
+R 0x20 -> 0 (miss)
+R 0x40 -> 0 (miss)
+
+operations=6 loads=6 stores=0
+VC entries=2 replacement=LRU
+L1 read_hits=0 read_misses=6 write_hits=0 write_misses=0 writebacks=0 compulsory_misses=3 capacity_misses=0 conflict_misses=3
+VC read_hits=3 read_misses=3 write_hits=0 write_misses=0 writebacks=0
+L2 read_hits=0 read_misses=3 write_hits=0 write_misses=0 writebacks=0
+L3 read_hits=0 read_misses=3 write_hits=0 write_misses=0 writebacks=0

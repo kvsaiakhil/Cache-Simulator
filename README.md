@@ -115,6 +115,18 @@ make fuzz
 
 This runs a deterministic randomized workload across hierarchy modes, supported write-policy pairs, replacement policies, and optional victim-cache configurations. When it finds a failure, it reports the seed and recent access history so the case can be reproduced locally.
 
+### Generate a coverage report
+
+```bash
+make coverage
+```
+
+This builds dedicated coverage-instrumented test and fuzz binaries, runs both, and writes a project-only `gcov` summary plus `.gcov` files under `build/coverage/report/`.
+
+Useful outputs:
+- `build/coverage/report/coverage-summary.txt`
+- `build/coverage/report/*.gcov`
+
 ## Command-Line Usage
 
 ```bash
@@ -258,6 +270,8 @@ The repository includes three trace scales under [traces](traces):
 
 A full index with pattern descriptions and exact access counts is available in [traces/README.md](traces/README.md).
 
+Real sample CLI outputs are collected in [examples/README.md](examples/README.md), including plain-text summaries, CSV export, JSON export, victim-cache output, and write-through output.
+
 Each size bucket includes the same behavior families:
 
 - [sample_trace.txt](traces/tiny/sample_trace.txt)
@@ -327,6 +341,7 @@ The project currently uses a small [Makefile](Makefile) and GitHub Actions CI:
 - Build: `make`
 - Test: `make test`
 - Fuzz smoke: `make fuzz`
+- Coverage report: `make coverage`
 
 ## Current Limitations
 

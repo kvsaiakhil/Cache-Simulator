@@ -1,0 +1,10 @@
+W 0x0 <- 287454020 (miss)
+R 0x0 -> 287454020 (miss)
+R 0x10 -> 0 (miss)
+W 0x20 <- 2882400001 (miss)
+R 0x20 -> 2882400001 (miss)
+
+operations=5 loads=3 stores=2
+L1 read_hits=0 read_misses=3 write_hits=0 write_misses=2 writebacks=0 compulsory_misses=3 capacity_misses=0 conflict_misses=2
+L2 read_hits=0 read_misses=3 write_hits=0 write_misses=2 writebacks=0
+L3 read_hits=0 read_misses=3 write_hits=0 write_misses=2 writebacks=0
