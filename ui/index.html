@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cache Simulator Visual Lab</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="app-shell">
+        <header class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Cache Visual Lab</p>
+                <h1>Watch the hierarchy react in real time.</h1>
+                <p class="hero-text">
+                    A modern frontend for the cache simulator with live playback, policy switching,
+                    trace editing, and set-by-set hierarchy visualization.
+                </p>
+                <div class="hero-badges">
+                    <span>16B blocks</span>
+                    <span>L1/L2/L3</span>
+                    <span>Optional victim cache</span>
+                    <span>Live trace playback</span>
+                    <span>Inclusive / Exclusive / NINE</span>
+                </div>
+            </div>
+            <div class="hero-panel glass">
+                <p class="panel-label">Session</p>
+                <div class="session-grid">
+                    <div>
+                        <span class="label">Trace</span>
+                        <strong id="active-trace-name">sample_trace</strong>
+                    </div>
+                    <div>
+                        <span class="label">Operation</span>
+                        <strong id="current-op-label">Idle</strong>
+                    </div>
+                    <div>
+                        <span class="label">Hierarchy</span>
+                        <strong id="active-hierarchy-label">Inclusive</strong>
+                    </div>
+                    <div>
+                        <span class="label">Write Mode</span>
+                        <strong id="active-write-label">WB + WA</strong>
+                    </div>
+                    <div>
+                        <span class="label">Victim Cache</span>
+                        <strong id="active-victim-label">Off</strong>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="layout">
+            <section class="controls glass">
+                <div class="section-heading">
+                    <h2>Control Deck</h2>
+                    <p>Change policies, load traces, and drive playback.</p>
+                </div>
+
+                <div class="control-grid">
+                    <label>
+                        <span>Trace size</span>
+                        <select id="trace-size-select">
+                            <option value="tiny">Tiny</option>
+                            <option value="medium">Medium</option>
+                            <option value="long">Long</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Trace preset</span>
+                        <select id="trace-select"></select>
+                    </label>
+                    <label>
+                        <span>Hierarchy mode</span>
+                        <select id="inclusion-select">
+                            <option value="inclusive">Inclusive</option>
+                            <option value="exclusive">Exclusive</option>
+                            <option value="non-inclusive">Non-inclusive, Non-exclusive</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Write mode</span>
+                        <select id="write-mode-select">
+                            <option value="wb">WriteBack + WriteAllocate</option>
+                            <option value="wt">WriteThrough + NoWriteAllocate</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Replacement</span>
+                        <select id="replacement-select">
+                            <option value="lru">LRU</option>
+                            <option value="fifo">FIFO</option>
+                            <option value="random">Random</option>
+                        </select>
+                    </label>
+                    <label>
+                        <span>Victim cache</span>
+                        <select id="victim-cache-select">
+                            <option value="off">Off</option>
+                            <option value="1:lru">1 entry • LRU</option>
+                            <option value="2:lru">2 entries • LRU</option>
+                            <option value="4:lru">4 entries • LRU</option>
+                            <option value="2:fifo">2 entries • FIFO</option>
+                            <option value="2:random">2 entries • Random</option>
+                        </select>
+                    </label>
+                </div>
+
+                <label class="trace-editor">
+                    <span>Trace editor</span>
+                    <textarea id="trace-input" spellcheck="false"></textarea>
+                </label>
+
+                <div class="actions">
+                    <button id="load-trace-btn" class="primary">Load Trace</button>
+                    <button id="reset-btn">Reset</button>
+                    <button id="step-btn">Step</button>
+                    <button id="play-btn">Play</button>
+                    <button id="pause-btn">Pause</button>
+                </div>
+
+                <div class="speed-row">
+                    <label for="speed-range">Playback speed</label>
+                    <input id="speed-range" type="range" min="200" max="1600" step="100" value="800">
+                    <span id="speed-label">800 ms</span>
+                </div>
+
+                <div class="status-strip">
+                    <div>
+                        <span class="label">Progress</span>
+                        <strong id="progress-label">0 / 0</strong>
+                    </div>
+                    <div>
+                        <span class="label">Last result</span>
+                        <strong id="last-result-label">Waiting</strong>
+                    </div>
+                    <div>
+                        <span class="label">Current value</span>
+                        <strong id="current-value-label">-</strong>
+                    </div>
+                </div>
+            </section>
+
+            <section class="overview">
+                <div class="summary-card glass">
+                    <div class="section-heading compact">
+                        <h2>Summary</h2>
+                        <p>Trace execution and top-level miss behavior.</p>
+                    </div>
+                    <div class="summary-metrics">
+                        <article>
+                            <span class="label">Operations</span>
+                            <strong id="metric-ops">0</strong>
+                        </article>
+                        <article>
+                            <span class="label">Loads</span>
+                            <strong id="metric-loads">0</strong>
+                        </article>
+                        <article>
+                            <span class="label">Stores</span>
+                            <strong id="metric-stores">0</strong>
+                        </article>
+                        <article>
+                            <span class="label">L1 Hit Rate</span>
+                            <strong id="metric-hit-rate">0%</strong>
+                        </article>
+                    </div>
+                    <div class="miss-breakdown" id="miss-breakdown"></div>
+                </div>
+
+                <div class="timeline-card glass">
+                    <div class="section-heading compact">
+                        <h2>Live Event Feed</h2>
+                        <p>Each step records the path through the hierarchy.</p>
+                    </div>
+                    <div id="event-log" class="event-log"></div>
+                </div>
+            </section>
+
+            <section class="levels" id="levels-root"></section>
+
+            <section class="exports glass">
+                <div class="section-heading compact">
+                    <h2>Live Exports</h2>
+                    <p>Browser-side views of the same CSV and JSON stats the CLI exposes.</p>
+                </div>
+                <div class="export-grid">
+                    <article class="export-card">
+                        <div class="export-head">
+                            <h3>CSV</h3>
+                        </div>
+                        <pre id="csv-output" class="export-output"></pre>
+                    </article>
+                    <article class="export-card">
+                        <div class="export-head">
+                            <h3>JSON</h3>
+                        </div>
+                        <pre id="json-output" class="export-output"></pre>
+                    </article>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <template id="level-template">
+        <article class="level-card glass">
+            <div class="level-head">
+                <div>
+                    <p class="panel-label level-name"></p>
+                    <h3 class="level-title"></h3>
+                </div>
+                <div class="level-meta"></div>
+            </div>
+            <div class="level-stats"></div>
+            <div class="set-grid"></div>
+        </article>
+    </template>
+
+    <script src="app.js"></script>
+</body>
+</html>

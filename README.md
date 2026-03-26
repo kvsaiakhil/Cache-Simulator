@@ -4,6 +4,8 @@ A modular C++ cache simulator for experimenting with cache hierarchy behavior, r
 
 The project currently supports a three-level cache hierarchy (`L1`, `L2`, `L3`) with configurable hierarchy mode, trace replay, miss classification, and automated tests. It is structured as an extensible simulator rather than a one-file demo, so it can keep growing toward a more complete architecture study tool.
 
+An interactive browser frontend is also available in [ui/README.md](ui/README.md) for live hierarchy visualization and step-by-step trace playback.
+
 ## Top-Level Architecture
 
 ```mermaid
@@ -271,6 +273,17 @@ The repository includes three trace scales under [traces](traces):
 A full index with pattern descriptions and exact access counts is available in [traces/README.md](traces/README.md).
 
 Real sample CLI outputs are collected in [examples/README.md](examples/README.md), including plain-text summaries, CSV export, JSON export, victim-cache output, and write-through output.
+
+## Browser UI
+
+The repository also includes a standalone frontend in [ui/README.md](ui/README.md).
+
+It provides:
+- live `L1/L2/L3` visualization
+- tiny, medium, and long built-in trace presets
+- step, play, pause, reset controls
+- hierarchy-mode, write-mode, and replacement-policy switching
+- an editable trace input panel for experimenting in the browser
 
 Each size bucket includes the same behavior families:
 
