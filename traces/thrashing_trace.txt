@@ -1,0 +1,9 @@
+# Conflict-thrashing pattern:
+# Three blocks map to the same set in a 2-way cache.
+
+R 0x00
+R 0x20
+R 0x40
+R 0x00
+R 0x20
+R 0x40
