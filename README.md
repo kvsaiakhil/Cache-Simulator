@@ -151,7 +151,7 @@ R 0x0       # read it back
 
 ## Current Default Simulator Configuration
 
-The command-line driver in [src/main.cpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/src/main.cpp) currently instantiates:
+The command-line driver in [src/main.cpp](src/main.cpp) currently instantiates:
 
 - Block size: `16` bytes
 - `L1`: `64` bytes, `2`-way
@@ -186,14 +186,14 @@ If `csv` or `json` is requested, that export is printed after the human-readable
 
 ## Included Trace Workloads
 
-The repository includes several synthetic traces under [traces](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces):
+The repository includes several synthetic traces under [traces](traces):
 
-- [sample_trace.txt](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces/sample_trace.txt)
-- [scan_trace.txt](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces/scan_trace.txt)
-- [thrashing_trace.txt](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces/thrashing_trace.txt)
-- [recency_friendly_trace.txt](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces/recency_friendly_trace.txt)
-- [streaming_trace.txt](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces/streaming_trace.txt)
-- [mixed_access_pattern_trace.txt](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/traces/mixed_access_pattern_trace.txt)
+- [sample_trace.txt](traces/sample_trace.txt)
+- [scan_trace.txt](traces/scan_trace.txt)
+- [thrashing_trace.txt](traces/thrashing_trace.txt)
+- [recency_friendly_trace.txt](traces/recency_friendly_trace.txt)
+- [streaming_trace.txt](traces/streaming_trace.txt)
+- [mixed_access_pattern_trace.txt](traces/mixed_access_pattern_trace.txt)
 
 These traces are meant to expose different cache behaviors such as scan-heavy access, reuse-friendly access, and conflict-heavy access.
 
@@ -225,19 +225,19 @@ build/                    Generated binaries from the Makefile
 
 ### Key files
 
-- [include/cache_simulator/cache.hpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/include/cache_simulator/cache.hpp)
+- [include/cache_simulator/cache.hpp](include/cache_simulator/cache.hpp)
   Umbrella include for the main public types.
-- [include/cache_simulator/l1_cache.hpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/include/cache_simulator/l1_cache.hpp)
+- [include/cache_simulator/l1_cache.hpp](include/cache_simulator/l1_cache.hpp)
   Core cache-level implementation.
-- [include/cache_simulator/cache_hierarchy.hpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/include/cache_simulator/cache_hierarchy.hpp)
+- [include/cache_simulator/cache_hierarchy.hpp](include/cache_simulator/cache_hierarchy.hpp)
   Three-level hierarchy controller.
-- [include/cache_simulator/cache_set.hpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/include/cache_simulator/cache_set.hpp)
+- [include/cache_simulator/cache_set.hpp](include/cache_simulator/cache_set.hpp)
   Set-local lookup and replacement behavior.
-- [include/cache_simulator/cache_stats.hpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/include/cache_simulator/cache_stats.hpp)
+- [include/cache_simulator/cache_stats.hpp](include/cache_simulator/cache_stats.hpp)
   Statistics container and CSV/JSON export helpers.
-- [include/cache_simulator/trace_runner.hpp](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/include/cache_simulator/trace_runner.hpp)
+- [include/cache_simulator/trace_runner.hpp](include/cache_simulator/trace_runner.hpp)
   Trace parsing and replay.
-- [docs/spec.md](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/docs/spec.md)
+- [docs/spec.md](docs/spec.md)
   Implementation roadmap and feature spec.
 
 ## Development Notes
@@ -248,7 +248,7 @@ The main cache classes are templated on block size, so much of the implementatio
 
 ### Build system
 
-The project currently uses a small [Makefile](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/Makefile) and GitHub Actions CI:
+The project currently uses a small [Makefile](Makefile) and GitHub Actions CI:
 
 - Build: `make`
 - Test: `make test`
@@ -263,7 +263,7 @@ The project currently uses a small [Makefile](/Users/kvsaiakhil/Projects/cache_s
 
 ## Roadmap
 
-For the broader project direction, see [docs/spec.md](/Users/kvsaiakhil/Projects/cache_simulator/Cache-Simulator/docs/spec.md).
+For the broader project direction, see [docs/spec.md](docs/spec.md).
 
 Good next steps for the codebase are:
 - separate demand stats from internal hierarchy traffic
