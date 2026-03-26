@@ -36,26 +36,37 @@ Current miss reporting:
 ## Specification
 
 Project requirements and implementation roadmap:
-- `requirements/spec.md`
+- `docs/spec.md`
+
+## Repository layout
+
+```text
+include/cache_simulator/  Public headers
+src/                      Executable and non-header-only implementation files
+tests/                    Test suite
+traces/                   Trace-driven regression inputs
+docs/                     Project specification and roadmap
+build/                    Generated binaries (via Makefile)
+```
 
 ## Build and run
 
 ```bash
 make
-./cache_sim
+./build/cache_sim
 ```
 
 ## Run a trace
 
 ```bash
-./cache_sim traces/sample_trace.txt inclusive
-./cache_sim traces/sample_trace.txt exclusive
-./cache_sim traces/sample_trace.txt non-inclusive
-./cache_sim traces/sample_trace.txt inclusive write-back
-./cache_sim traces/sample_trace.txt inclusive write-through
-./cache_sim traces/sample_trace.txt inclusive csv
-./cache_sim traces/sample_trace.txt inclusive json
-./cache_sim traces/sample_trace.txt inclusive write-through json
+./build/cache_sim traces/sample_trace.txt inclusive
+./build/cache_sim traces/sample_trace.txt exclusive
+./build/cache_sim traces/sample_trace.txt non-inclusive
+./build/cache_sim traces/sample_trace.txt inclusive write-back
+./build/cache_sim traces/sample_trace.txt inclusive write-through
+./build/cache_sim traces/sample_trace.txt inclusive csv
+./build/cache_sim traces/sample_trace.txt inclusive json
+./build/cache_sim traces/sample_trace.txt inclusive write-through json
 ```
 
 Trace format:

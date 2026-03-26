@@ -1,8 +1,8 @@
 #ifndef CACHE_HIERARCHY_HPP
 #define CACHE_HIERARCHY_HPP
 
-#include "cache_config.hpp"
-#include "l1_cache.hpp"
+#include "cache_simulator/cache_config.hpp"
+#include "cache_simulator/l1_cache.hpp"
 
 #include <cstdint>
 #include <sstream>

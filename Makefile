@@ -1,21 +1,25 @@
 CXX ?= g++
-CXXFLAGS ?= -std=c++17 -Wall -Wextra -pedantic -I.
+CXXFLAGS ?= -std=c++17 -Wall -Wextra -pedantic -Iinclude
 
-APP := cache_sim
-TEST_BIN := cache_tests
+BUILD_DIR := build
+APP := $(BUILD_DIR)/cache_sim
+TEST_BIN := $(BUILD_DIR)/cache_tests
 
 .PHONY: all test clean
 
 all: $(APP)
 
-$(APP): main.cpp replacement_policy.cpp
-	$(CXX) $(CXXFLAGS) main.cpp replacement_policy.cpp -o $(APP)
+$(BUILD_DIR):
+	mkdir -p $(BUILD_DIR)
 
-$(TEST_BIN): tests/test_cache.cpp replacement_policy.cpp
-	$(CXX) $(CXXFLAGS) tests/test_cache.cpp replacement_policy.cpp -o $(TEST_BIN)
+$(APP): src/main.cpp src/replacement_policy.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) src/main.cpp src/replacement_policy.cpp -o $(APP)
+
+$(TEST_BIN): tests/test_cache.cpp src/replacement_policy.cpp | $(BUILD_DIR)
+	$(CXX) $(CXXFLAGS) tests/test_cache.cpp src/replacement_policy.cpp -o $(TEST_BIN)
 
 test: $(TEST_BIN)
-	./$(TEST_BIN)
+	$(TEST_BIN)
 
 clean:
-	rm -f $(APP) $(TEST_BIN)
+	rm -rf $(BUILD_DIR)

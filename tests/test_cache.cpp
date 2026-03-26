@@ -1,9 +1,9 @@
-#include "cache_hierarchy.hpp"
-#include "cache_set.hpp"
-#include "cache_stats.hpp"
-#include "l1_cache.hpp"
-#include "replacement_policy.hpp"
-#include "trace_runner.hpp"
+#include "cache_simulator/cache_hierarchy.hpp"
+#include "cache_simulator/cache_set.hpp"
+#include "cache_simulator/cache_stats.hpp"
+#include "cache_simulator/l1_cache.hpp"
+#include "cache_simulator/replacement_policy.hpp"
+#include "cache_simulator/trace_runner.hpp"
 
 #include <cstdint>
 #include <exception>

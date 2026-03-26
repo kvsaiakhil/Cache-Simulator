@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-#include "cache_config.hpp"
+#include "cache_simulator/cache_config.hpp"
 
 class ReplacementPolicy {
 public:

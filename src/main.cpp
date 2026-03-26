@@ -1,5 +1,5 @@
-#include "cache_hierarchy.hpp"
-#include "trace_runner.hpp"
+#include "cache_simulator/cache_hierarchy.hpp"
+#include "cache_simulator/trace_runner.hpp"
 
 #include <cstdint>
 #include <iostream>

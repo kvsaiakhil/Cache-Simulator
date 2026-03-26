@@ -426,39 +426,33 @@ This layout is the target structure for the project as it grows.
 ```text
 Cache-Simulator/
   README.md
-  requirements/
+  docs/
     spec.md
   include/
-    cache_block.hpp
-    cache_set.hpp
-    cache_config.hpp
-    cache_stats.hpp
-    cache_level.hpp
-    l1_cache.hpp
-    l2_cache.hpp
-    main_memory.hpp
-    trace_runner.hpp
-    enums.hpp
+    cache_simulator/
+      cache.hpp
+      cache_block.hpp
+      cache_config.hpp
+      cache_hierarchy.hpp
+      cache_set.hpp
+      cache_stats.hpp
+      l1_cache.hpp
+      replacement_policy.hpp
+      trace_runner.hpp
   src/
-    cache_block.cpp
-    cache_set.cpp
-    cache_config.cpp
-    cache_stats.cpp
-    l1_cache.cpp
-    l2_cache.cpp
-    main_memory.cpp
-    trace_runner.cpp
     main.cpp
+    replacement_policy.cpp
   tests/
-    test_cache_block.cpp
-    test_l1_cache.cpp
-    test_l2_cache.cpp
-    test_trace_runner.cpp
+    test_cache.cpp
   traces/
     sample_trace.txt
+  build/
+    cache_sim
+    cache_tests
 ```
 
-For the current stage of the repository, the smaller flat layout is acceptable, but the implementation should move toward the structure above as the project grows.
+The repository now follows this layout, with most cache logic remaining header-only
+because the main cache classes are templated on block size.
 
 ## 8. Configuration Enums
 

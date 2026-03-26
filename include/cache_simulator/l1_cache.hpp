@@ -1,11 +1,11 @@
 #ifndef L1_CACHE_HPP
 #define L1_CACHE_HPP
 
-#include "cache_block.hpp"
-#include "cache_set.hpp"
-#include "cache_config.hpp"
-#include "cache_stats.hpp"
-#include "replacement_policy.hpp"
+#include "cache_simulator/cache_block.hpp"
+#include "cache_simulator/cache_set.hpp"
+#include "cache_simulator/cache_config.hpp"
+#include "cache_simulator/cache_stats.hpp"
+#include "cache_simulator/replacement_policy.hpp"
 
 #include <cstdint>
 #include <list>
