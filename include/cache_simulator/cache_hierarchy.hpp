@@ -375,6 +375,38 @@ private:
         }
     }
 
+    template <typename CacheType>
+    static bool overwrite_with_dirty_snapshot_if_present(const CacheType& cache,
+                                                         uint32_t byte_address,
+                                                         LineSnapshot& snapshot) {
+        LineSnapshot candidate{};
+        if (!cache.get_line_snapshot(byte_address, candidate) || !candidate.dirty) {
+            return false;
+        }
+        snapshot = candidate;
+        return true;
+    }
+
+    void reconcile_inclusive_eviction_snapshot(L1Cache<BlockSizeBytes>& target,
+                                               uint32_t byte_address,
+                                               LineSnapshot& snapshot) {
+        if (&target == &l3_) {
+            overwrite_with_dirty_snapshot_if_present(l2_, byte_address, snapshot);
+            if (victim_cache_.enabled()) {
+                overwrite_with_dirty_snapshot_if_present(victim_cache_, byte_address, snapshot);
+            }
+            overwrite_with_dirty_snapshot_if_present(l1_, byte_address, snapshot);
+            return;
+        }
+
+        if (&target == &l2_) {
+            if (victim_cache_.enabled()) {
+                overwrite_with_dirty_snapshot_if_present(victim_cache_, byte_address, snapshot);
+            }
+            overwrite_with_dirty_snapshot_if_present(l1_, byte_address, snapshot);
+        }
+    }
+
     void insert_into_level(L1Cache<BlockSizeBytes>& target,
                            uint32_t byte_address,
                            const LineSnapshot& snapshot,
@@ -387,8 +419,12 @@ private:
         }
 
         if (config_.inclusion_policy == InclusionPolicy::Inclusive) {
+            reconcile_inclusive_eviction_snapshot(target,
+                                                 eviction.block_address * BlockSizeBytes,
+                                                 eviction.snapshot);
             if (&target == &l3_) {
-                l2_.remove_line(eviction.block_address * BlockSizeBytes, eviction.snapshot);
+                LineSnapshot discarded{};
+                l2_.remove_line(eviction.block_address * BlockSizeBytes, discarded);
                 invalidate_upper_cluster_line(eviction.block_address * BlockSizeBytes);
             } else if (&target == &l2_) {
                 invalidate_upper_cluster_line(eviction.block_address * BlockSizeBytes);

@@ -39,6 +39,14 @@ void expect_equal_u64(uint64_t actual, uint64_t expected, const std::string& mes
     }
 }
 
+void expect_contains(const std::string& haystack,
+                     const std::string& needle,
+                     const std::string& message) {
+    if (haystack.find(needle) == std::string::npos) {
+        throw std::runtime_error(message + " missing=" + needle);
+    }
+}
+
 uint32_t read_word_from_snapshot_bytes(const CacheLineSnapshot<16>& snapshot, uint32_t byte_offset) {
     return static_cast<uint32_t>(snapshot.data[byte_offset]) |
            (static_cast<uint32_t>(snapshot.data[byte_offset + 1]) << 8) |
@@ -87,6 +95,15 @@ void test_lru_policy_prefers_least_recently_used() {
 
     const uint32_t victim = policy.choose_victim({true, true});
     expect_equal(victim, 1, "LRU should evict the least recently used way");
+}
+
+void test_create_replacement_policy_returns_instances_for_all_supported_types() {
+    expect_true(static_cast<bool>(create_replacement_policy(ReplacementPolicyType::LRU)),
+                "Factory should create an LRU replacement policy");
+    expect_true(static_cast<bool>(create_replacement_policy(ReplacementPolicyType::FIFO)),
+                "Factory should create a FIFO replacement policy");
+    expect_true(static_cast<bool>(create_replacement_policy(ReplacementPolicyType::Random)),
+                "Factory should create a Random replacement policy");
 }
 
 void test_fifo_policy_prefers_oldest_insertion() {
@@ -192,6 +209,52 @@ void test_l1_cache_counts_writebacks_on_dirty_eviction() {
     expect_equal_u64(cache.writebacks(), 1, "Dirty eviction should increment writeback count");
 }
 
+void test_cache_block_word_and_byte_access_round_trip() {
+    CacheBlock<16> block;
+    block.set_tag(0xAB);
+    block.set_valid(true);
+    block.set_dirty(true);
+    block.write_word(4, 0x12345678u);
+
+    expect_equal(block.tag(), 0xAB, "CacheBlock should retain tag");
+    expect_true(block.valid(), "CacheBlock should retain valid bit");
+    expect_true(block.dirty(), "CacheBlock should retain dirty bit");
+    expect_equal(block.read_word(4), 0x12345678u, "CacheBlock should round-trip word writes");
+    expect_equal(block.read_byte(4), 0x78u, "CacheBlock should store words in little-endian order");
+    expect_equal(block.read_byte(5), 0x56u, "CacheBlock should store second byte correctly");
+    expect_equal(block.read_byte(6), 0x34u, "CacheBlock should store third byte correctly");
+    expect_equal(block.read_byte(7), 0x12u, "CacheBlock should store fourth byte correctly");
+}
+
+void test_cache_block_rejects_invalid_offsets_and_reset_clears_state() {
+    CacheBlock<16> block;
+    bool threw = false;
+    try {
+        block.write_word(2, 0xDEADBEEFu);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect_true(threw, "CacheBlock should reject unaligned word writes");
+
+    threw = false;
+    try {
+        (void)block.read_byte(16);
+    } catch (const std::out_of_range&) {
+        threw = true;
+    }
+    expect_true(threw, "CacheBlock should reject byte reads past the end of the block");
+
+    block.set_tag(7);
+    block.set_valid(true);
+    block.set_dirty(true);
+    block.write_word(0, 0xCAFEBABEu);
+    block.reset();
+    expect_equal(block.tag(), 0, "CacheBlock reset should clear the tag");
+    expect_true(!block.valid(), "CacheBlock reset should clear the valid bit");
+    expect_true(!block.dirty(), "CacheBlock reset should clear the dirty bit");
+    expect_equal(block.read_word(0), 0u, "CacheBlock reset should zero stored bytes");
+}
+
 void test_standalone_l1_rejects_unsupported_store_modes() {
     constexpr uint32_t kBlockSizeBytes = 16;
     const CacheConfig config{
@@ -211,6 +274,39 @@ void test_standalone_l1_rejects_unsupported_store_modes() {
 
     expect_true(threw,
                 "Standalone L1Cache should reject store modes that require a backing hierarchy");
+}
+
+void test_l1_cache_validates_geometry_and_alignment() {
+    bool threw = false;
+    try {
+        const CacheConfig invalid_geometry{
+            48,
+            2,
+            WritePolicy::WriteBack,
+            WriteMissPolicy::WriteAllocate,
+            ReplacementPolicyType::LRU};
+        L1Cache<16> cache(invalid_geometry);
+        (void)cache;
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect_true(threw, "L1Cache should reject cache sizes that are not multiples of block size");
+
+    const CacheConfig valid_config{
+        64,
+        2,
+        WritePolicy::WriteBack,
+        WriteMissPolicy::WriteAllocate,
+        ReplacementPolicyType::LRU};
+    L1Cache<16> cache(valid_config);
+    uint32_t value = 0;
+    threw = false;
+    try {
+        cache.load(0x02, value);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect_true(threw, "L1Cache should reject unaligned loads");
 }
 
 void test_cache_stats_accumulates_counters() {
@@ -241,6 +337,47 @@ void test_cache_set_lookup_and_install() {
     expect_equal(block.tag(), 0xA, "Installed block should record tag");
     expect_equal(static_cast<uint32_t>(set.find_way_by_tag(0xA)), 0,
                  "Set should find installed tag");
+}
+
+void test_cache_set_rejects_null_replacement_policy() {
+    bool threw = false;
+    try {
+        CacheSet<16> set(2, nullptr);
+        (void)set;
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+
+    expect_true(threw, "CacheSet should reject null replacement policies");
+}
+
+void test_victim_cache_disabled_and_validation_behavior() {
+    VictimCache<16> disabled_cache(VictimCacheConfig{false, 0, ReplacementPolicyType::LRU});
+    uint32_t value = 0;
+    CacheLineSnapshot<16> snapshot{};
+    expect_true(!disabled_cache.enabled(), "Disabled victim cache should report disabled");
+    expect_true(!disabled_cache.contains_line(0x00), "Disabled victim cache should not contain lines");
+    expect_true(!disabled_cache.access_load(0x00, value), "Disabled victim cache should miss loads");
+    expect_true(!disabled_cache.access_store(0x00, 0x1u, false),
+                "Disabled victim cache should miss stores");
+    expect_true(!disabled_cache.get_line_snapshot(0x00, snapshot),
+                "Disabled victim cache should not provide snapshots");
+
+    bool threw = false;
+    try {
+        VictimCache<16> invalid_cache(VictimCacheConfig{true, 0, ReplacementPolicyType::LRU});
+        (void)invalid_cache;
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    expect_true(threw, "Enabled victim cache should require a non-zero entry count");
+}
+
+void test_victim_cache_debug_print_reports_disabled_state() {
+    VictimCache<16> cache(VictimCacheConfig{false, 0, ReplacementPolicyType::LRU});
+    std::ostringstream os;
+    cache.debug_print(os);
+    expect_contains(os.str(), "disabled", "Victim-cache debug print should mention disabled state");
 }
 
 void test_trace_runner_executes_trace_file() {
@@ -309,6 +446,44 @@ void test_trace_runner_rejects_extra_tokens() {
 
     std::filesystem::remove(trace_path);
     expect_true(threw, "Trace runner should reject trailing tokens");
+}
+
+void test_trace_runner_rejects_invalid_operation_and_missing_file() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const CacheConfig config{
+        64,
+        2,
+        WritePolicy::WriteBack,
+        WriteMissPolicy::WriteAllocate,
+        ReplacementPolicyType::LRU};
+
+    const std::filesystem::path invalid_trace_path =
+        std::filesystem::temp_directory_path() / "cache_trace_invalid_opcode.trace";
+    {
+        std::ofstream trace(invalid_trace_path);
+        trace << "X 0x0\n";
+    }
+
+    L1Cache<kBlockSizeBytes> cache(config);
+    TraceRunner<L1Cache<kBlockSizeBytes>> runner(cache);
+    std::ostringstream output;
+
+    bool threw = false;
+    try {
+        runner.run_file(invalid_trace_path.string(), output);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    std::filesystem::remove(invalid_trace_path);
+    expect_true(threw, "Trace runner should reject invalid opcodes");
+
+    threw = false;
+    try {
+        runner.run_file("traces/does_not_exist.trace", output);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+    expect_true(threw, "Trace runner should reject missing trace files");
 }
 
 void test_trace_runner_allows_inline_comments() {
@@ -396,6 +571,36 @@ void test_trace_runner_rejects_negative_numeric_tokens() {
 
     std::filesystem::remove(trace_path);
     expect_true(threw, "Trace runner should reject negative numeric tokens");
+}
+
+void test_trace_runner_rejects_store_without_value() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const CacheConfig config{
+        64,
+        2,
+        WritePolicy::WriteBack,
+        WriteMissPolicy::WriteAllocate,
+        ReplacementPolicyType::LRU};
+
+    const std::filesystem::path trace_path =
+        std::filesystem::temp_directory_path() / "cache_trace_missing_value.trace";
+    {
+        std::ofstream trace(trace_path);
+        trace << "W 0x0\n";
+    }
+
+    L1Cache<kBlockSizeBytes> cache(config);
+    TraceRunner<L1Cache<kBlockSizeBytes>> runner(cache);
+    std::ostringstream output;
+    bool threw = false;
+    try {
+        runner.run_file(trace_path.string(), output);
+    } catch (const std::runtime_error&) {
+        threw = true;
+    }
+
+    std::filesystem::remove(trace_path);
+    expect_true(threw, "Trace runner should reject store operations without a value");
 }
 
 void test_regression_scan_trace() {
@@ -599,6 +804,52 @@ void test_hierarchy_stats_json_export_contains_all_levels() {
                 "JSON export should contain stat fields");
 }
 
+void test_hierarchy_stats_exports_include_victim_cache_when_enabled() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{128, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{256, 4, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Inclusive,
+        VictimCacheConfig{true, 1, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    uint32_t value = 0;
+    hierarchy.load(0x00, value);
+    hierarchy.load(0x20, value);
+    hierarchy.load(0x40, value);
+    hierarchy.load(0x00, value);
+
+    const std::string csv = hierarchy.stats_csv();
+    const std::string json = hierarchy.stats_json();
+    expect_true(csv.find("\nVC,") != std::string::npos,
+                "CSV export should include a victim-cache row when enabled");
+    expect_true(json.find("\"VC\"") != std::string::npos,
+                "JSON export should include a victim-cache object when enabled");
+}
+
+void test_hierarchy_debug_print_includes_victim_cache_section_when_enabled() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{128, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{256, 4, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Inclusive,
+        VictimCacheConfig{true, 1, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    std::ostringstream os;
+    hierarchy.debug_print(os);
+    expect_contains(os.str(), "=== VC ===",
+                    "Hierarchy debug print should include a VC section when enabled");
+}
+
 void test_hierarchy_rejects_unsupported_writeback_no_write_allocate() {
     constexpr uint32_t kBlockSizeBytes = 16;
     const HierarchyConfig config{
@@ -727,6 +978,47 @@ void test_writethrough_hit_propagates_to_lower_levels() {
                  "Write-through hit should propagate updated value beyond L1");
 }
 
+void test_writethrough_victim_cache_hit_stays_clean() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteThrough, WriteMissPolicy::NoWriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{128, 2, WritePolicy::WriteThrough, WriteMissPolicy::NoWriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{256, 4, WritePolicy::WriteThrough, WriteMissPolicy::NoWriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Inclusive,
+        VictimCacheConfig{true, 1, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    uint32_t value = 0;
+    expect_true(!hierarchy.load(0x00, value), "First load should miss");
+    expect_true(!hierarchy.load(0x20, value), "Second load should miss");
+    expect_true(!hierarchy.load(0x40, value), "Third load should evict the first line into VC");
+    expect_true(hierarchy.victim_cache().contains_line(0x00),
+                "Victim cache should hold the evicted line before the store");
+
+    expect_true(!hierarchy.store(0x00, 0xCAFEBABEu),
+                "Write-through store rescued from victim cache should still report L1 miss");
+
+    L1Cache<kBlockSizeBytes>::LineSnapshot snapshot{};
+    expect_true(hierarchy.l1().get_line_snapshot(0x00, snapshot),
+                "Victim-cache rescue should promote the line back into L1");
+    expect_equal(read_word_from_snapshot_bytes(snapshot, 0), 0xCAFEBABEu,
+                 "Victim-cache rescue should update the value in L1");
+    expect_true(!snapshot.dirty,
+                "Write-through victim-cache rescue should leave the L1 line clean");
+
+    expect_true(hierarchy.l2().get_line_snapshot(0x00, snapshot),
+                "Inclusive write-through should keep the line in L2");
+    expect_true(!snapshot.dirty,
+                "Write-through victim-cache rescue should leave the L2 line clean");
+    expect_true(hierarchy.l3().get_line_snapshot(0x00, snapshot),
+                "Inclusive write-through should keep the line in L3");
+    expect_true(!snapshot.dirty,
+                "Write-through victim-cache rescue should leave the L3 line clean");
+}
+
 void test_inclusive_dirty_cascade_keeps_levels_consistent() {
     constexpr uint32_t kBlockSizeBytes = 16;
     const HierarchyConfig config{
@@ -751,25 +1043,84 @@ void test_inclusive_dirty_cascade_keeps_levels_consistent() {
                 "L3 should no longer contain the evicted line");
 }
 
+void test_inclusive_victim_cache_preserves_dirty_data_on_lower_eviction() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Inclusive,
+        VictimCacheConfig{true, 2, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    expect_true(!hierarchy.store(0x00, 0x11112222u), "First store should miss");
+    expect_true(!hierarchy.store(0x20, 0x33334444u), "Second store should miss");
+    expect_true(!hierarchy.store(0x40, 0x55556666u),
+                "Third store should evict the oldest dirty line from lower levels");
+
+    uint32_t value = 0;
+    expect_true(!hierarchy.load(0x00, value),
+                "Reload should miss in upper levels after inclusive lower eviction");
+    expect_equal(value, 0x11112222u,
+                 "Inclusive eviction should preserve the newest dirty data via writeback");
+}
+
+void test_hierarchy_writebacks_include_victim_cache_writebacks() {
+    constexpr uint32_t kBlockSizeBytes = 16;
+    const HierarchyConfig config{
+        CacheConfig{32, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{128, 2, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        CacheConfig{256, 4, WritePolicy::WriteBack, WriteMissPolicy::WriteAllocate,
+                    ReplacementPolicyType::LRU},
+        InclusionPolicy::Inclusive,
+        VictimCacheConfig{true, 1, ReplacementPolicyType::LRU}};
+
+    CacheHierarchy<kBlockSizeBytes> hierarchy(config);
+    expect_true(!hierarchy.store(0x00, 0x01020304u), "First store should miss");
+    expect_true(!hierarchy.store(0x20, 0x11121314u), "Second store should miss");
+    expect_true(!hierarchy.store(0x40, 0x21222324u), "Third store should miss");
+    expect_true(!hierarchy.store(0x60, 0x31323334u),
+                "Fourth store should overflow the victim cache");
+
+    expect_true(hierarchy.victim_cache().writebacks() > 0,
+                "Victim cache overflow should record a victim-cache writeback");
+    expect_true(hierarchy.writebacks() >= hierarchy.victim_cache().writebacks(),
+                "Hierarchy writebacks should include victim-cache writebacks");
+}
+
 }  // namespace
 
 int main() {
     const std::vector<void (*)()> tests = {
         test_lru_policy_prefers_least_recently_used,
+        test_create_replacement_policy_returns_instances_for_all_supported_types,
         test_fifo_policy_prefers_oldest_insertion,
         test_random_policy_is_deterministic_and_uses_empty_way_first,
         test_l1_cache_fifo_eviction_behavior,
         test_l1_cache_random_policy_wires_through_config,
         test_l1_cache_lru_eviction_behavior,
         test_l1_cache_counts_writebacks_on_dirty_eviction,
+        test_cache_block_word_and_byte_access_round_trip,
+        test_cache_block_rejects_invalid_offsets_and_reset_clears_state,
         test_standalone_l1_rejects_unsupported_store_modes,
+        test_l1_cache_validates_geometry_and_alignment,
         test_cache_stats_accumulates_counters,
         test_cache_set_lookup_and_install,
+        test_cache_set_rejects_null_replacement_policy,
+        test_victim_cache_disabled_and_validation_behavior,
+        test_victim_cache_debug_print_reports_disabled_state,
         test_trace_runner_executes_trace_file,
         test_trace_runner_rejects_extra_tokens,
+        test_trace_runner_rejects_invalid_operation_and_missing_file,
         test_trace_runner_allows_inline_comments,
         test_trace_runner_rejects_out_of_range_numeric_tokens,
         test_trace_runner_rejects_negative_numeric_tokens,
+        test_trace_runner_rejects_store_without_value,
         test_regression_scan_trace,
         test_regression_thrashing_trace,
         test_regression_recency_friendly_trace,
@@ -782,12 +1133,17 @@ int main() {
         test_victim_cache_eviction_demotes_in_exclusive_mode,
         test_hierarchy_stats_csv_export_contains_all_levels,
         test_hierarchy_stats_json_export_contains_all_levels,
+        test_hierarchy_stats_exports_include_victim_cache_when_enabled,
+        test_hierarchy_debug_print_includes_victim_cache_section_when_enabled,
         test_hierarchy_rejects_unsupported_writeback_no_write_allocate,
         test_hierarchy_rejects_unsupported_writethrough_writeallocate,
         test_hierarchy_rejects_mixed_write_modes_across_levels,
         test_writethrough_noallocate_store_miss_updates_memory_without_allocating,
         test_writethrough_hit_propagates_to_lower_levels,
+        test_writethrough_victim_cache_hit_stays_clean,
         test_inclusive_dirty_cascade_keeps_levels_consistent,
+        test_inclusive_victim_cache_preserves_dirty_data_on_lower_eviction,
+        test_hierarchy_writebacks_include_victim_cache_writebacks,
     };
 
     for (const auto test : tests) {

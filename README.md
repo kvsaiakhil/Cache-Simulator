@@ -91,6 +91,7 @@ make
 This creates:
 - `build/cache_sim`
 - `build/cache_tests`
+- `build/cache_fuzz`
 
 ### Run the built-in demo
 
@@ -105,6 +106,14 @@ If you run the binary with no arguments, it executes a small built-in access seq
 ```bash
 make test
 ```
+
+### Run the fuzz target
+
+```bash
+make fuzz
+```
+
+This runs a deterministic randomized workload across hierarchy modes, supported write-policy pairs, replacement policies, and optional victim-cache configurations. When it finds a failure, it reports the seed and recent access history so the case can be reproduced locally.
 
 ## Command-Line Usage
 
@@ -317,6 +326,7 @@ The project currently uses a small [Makefile](Makefile) and GitHub Actions CI:
 
 - Build: `make`
 - Test: `make test`
+- Fuzz smoke: `make fuzz`
 
 ## Current Limitations
 
