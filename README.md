@@ -1,8 +1,8 @@
 # Cache Simulator
 
-A modular C++ cache simulator for experimenting with cache hierarchy behavior, replacement policies, write policies, and trace-driven workloads.
+A modular C++ cache simulator for experimenting with cache hierarchy behavior, replacement policies, write policies, victim-cache behavior, and trace-driven workloads.
 
-The project currently supports a three-level cache hierarchy (`L1`, `L2`, `L3`) with configurable hierarchy mode, trace replay, miss classification, and automated tests. It is structured as an extensible simulator rather than a one-file demo, so it can keep growing toward a more complete architecture study tool.
+The project currently supports a three-level cache hierarchy (`L1`, `L2`, `L3`) plus an optional victim cache, configurable hierarchy mode, trace replay, miss classification, automated tests, deterministic fuzzing, coverage reporting, and a standalone browser UI. It is structured as an extensible simulator rather than a one-file demo, so it can keep growing toward a more complete architecture study tool.
 
 An interactive browser frontend is also available in [ui/README.md](ui/README.md) for live hierarchy visualization and step-by-step trace playback.
 
@@ -82,6 +82,19 @@ The simulator currently enforces the same write policy and write-miss policy acr
 - CSV export
 - JSON export
 
+### Quality tooling
+- Deterministic unit/regression tests
+- Deterministic randomized fuzz target
+- `gcov`-based coverage reporting
+- GitHub Actions CI for build, test, and fuzz smoke
+
+### Browser UI
+- Standalone frontend under [ui/README.md](ui/README.md)
+- Live `L1`, optional `VC`, `L2`, and `L3` visualization
+- Tiny, medium, and long built-in trace presets
+- Editable trace playback
+- Live CSV and JSON stats panels
+
 ## Quick Start
 
 ### Build
@@ -128,6 +141,16 @@ This builds dedicated coverage-instrumented test and fuzz binaries, runs both, a
 Useful outputs:
 - `build/coverage/report/coverage-summary.txt`
 - `build/coverage/report/*.gcov`
+
+### Run the browser UI
+
+```bash
+cd ui
+python3 -m http.server 8080
+open http://localhost:8080
+```
+
+The UI is documented in [ui/README.md](ui/README.md).
 
 ## Command-Line Usage
 
@@ -237,7 +260,7 @@ The CLI currently changes:
 - victim-cache size and replacement policy
 - export format
 
-The cache sizes and replacement policy used by the main executable are still hardcoded in the driver for now.
+The cache sizes and the main-cache replacement policy used by the executable are still hardcoded in the driver for now.
 
 ## Sample Output
 
@@ -279,11 +302,17 @@ Real sample CLI outputs are collected in [examples/README.md](examples/README.md
 The repository also includes a standalone frontend in [ui/README.md](ui/README.md).
 
 It provides:
-- live `L1/L2/L3` visualization
+- live `L1/VC/L2/L3` visualization
 - tiny, medium, and long built-in trace presets
 - step, play, pause, reset controls
-- hierarchy-mode, write-mode, and replacement-policy switching
+- hierarchy-mode, write-mode, replacement-policy, and victim-cache switching
 - an editable trace input panel for experimenting in the browser
+- live CSV and JSON export views
+
+Important note:
+- the frontend mirrors the simulator behavior in JavaScript for visualization
+- it is not yet wired directly to the C++ binary as a backend
+- it is still in progress and should be treated as an evolving preview rather than a fully stable interface
 
 Each size bucket includes the same behavior families:
 
@@ -318,6 +347,8 @@ include/cache_simulator/  Public headers
 src/                      Executable and non-header-only implementation files
 tests/                    Test suite
 traces/                   Trace inputs and regression workloads
+examples/                 Real sample CLI outputs and output-format guide
+ui/                       Standalone browser frontend
 docs/                     Specification and project roadmap
 build/                    Generated binaries from the Makefile
 ```
@@ -338,6 +369,14 @@ build/                    Generated binaries from the Makefile
   Statistics container and CSV/JSON export helpers.
 - [include/cache_simulator/trace_runner.hpp](include/cache_simulator/trace_runner.hpp)
   Trace parsing and replay.
+- [tests/test_cache.cpp](tests/test_cache.cpp)
+  Deterministic regression and feature tests.
+- [tests/fuzz_cache.cpp](tests/fuzz_cache.cpp)
+  Deterministic randomized hierarchy fuzzer.
+- [examples/README.md](examples/README.md)
+  Captured CLI outputs and output-format walkthrough.
+- [ui/README.md](ui/README.md)
+  Browser frontend overview and local run instructions.
 - [docs/spec.md](docs/spec.md)
   Implementation roadmap and feature spec.
 
@@ -359,11 +398,12 @@ The project currently uses a small [Makefile](Makefile) and GitHub Actions CI:
 ## Current Limitations
 
 - The executable uses fixed cache sizes and `LRU` in `main.cpp`
-- The executable uses fixed `L1/L2/L3` sizes in `main.cpp`
 - Block size is compile-time fixed in the instantiated cache type
 - Lower-level stats still include hierarchy-internal activity, so they are not yet cleanly separated into demand traffic vs internal refill/writeback traffic
 - `L2` and `L3` currently reuse the same cache-level implementation rather than having fully separate level-specific classes
 - Accesses are modeled as aligned 32-bit word accesses at the cache API level
+- The browser UI mirrors simulator behavior in JavaScript and is not yet driven by the C++ binary directly
+- The browser UI is still under active development and may lag behind or diverge from the simulator in edge cases
 
 ## Roadmap
 
