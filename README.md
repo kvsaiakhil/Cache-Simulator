@@ -99,15 +99,15 @@ Arguments:
 ### Example commands
 
 ```bash
-./build/cache_sim traces/sample_trace.txt
-./build/cache_sim traces/sample_trace.txt inclusive
-./build/cache_sim traces/sample_trace.txt exclusive
-./build/cache_sim traces/sample_trace.txt non-inclusive
-./build/cache_sim traces/sample_trace.txt inclusive write-back
-./build/cache_sim traces/sample_trace.txt inclusive write-through
-./build/cache_sim traces/sample_trace.txt inclusive csv
-./build/cache_sim traces/sample_trace.txt inclusive json
-./build/cache_sim traces/sample_trace.txt inclusive write-through json
+./build/cache_sim traces/tiny/sample_trace.txt
+./build/cache_sim traces/tiny/sample_trace.txt inclusive
+./build/cache_sim traces/tiny/sample_trace.txt exclusive
+./build/cache_sim traces/tiny/sample_trace.txt non-inclusive
+./build/cache_sim traces/tiny/sample_trace.txt inclusive write-back
+./build/cache_sim traces/tiny/sample_trace.txt inclusive write-through
+./build/cache_sim traces/tiny/sample_trace.txt inclusive csv
+./build/cache_sim traces/tiny/sample_trace.txt inclusive json
+./build/cache_sim traces/tiny/sample_trace.txt inclusive write-through json
 ```
 
 ## Trace Format
@@ -186,14 +186,25 @@ If `csv` or `json` is requested, that export is printed after the human-readable
 
 ## Included Trace Workloads
 
-The repository includes several synthetic traces under [traces](traces):
+The repository includes three trace scales under [traces](traces):
 
-- [sample_trace.txt](traces/sample_trace.txt)
-- [scan_trace.txt](traces/scan_trace.txt)
-- [thrashing_trace.txt](traces/thrashing_trace.txt)
-- [recency_friendly_trace.txt](traces/recency_friendly_trace.txt)
-- [streaming_trace.txt](traces/streaming_trace.txt)
-- [mixed_access_pattern_trace.txt](traces/mixed_access_pattern_trace.txt)
+- [traces/tiny](traces/tiny)
+  Original small regression traces
+- [traces/medium](traces/medium)
+  1000-access variants
+- [traces/long](traces/long)
+  10000-access variants
+
+A full index with pattern descriptions and exact access counts is available in [traces/README.md](traces/README.md).
+
+Each size bucket includes the same behavior families:
+
+- [sample_trace.txt](traces/tiny/sample_trace.txt)
+- [scan_trace.txt](traces/tiny/scan_trace.txt)
+- [thrashing_trace.txt](traces/tiny/thrashing_trace.txt)
+- [recency_friendly_trace.txt](traces/tiny/recency_friendly_trace.txt)
+- [streaming_trace.txt](traces/tiny/streaming_trace.txt)
+- [mixed_access_pattern_trace.txt](traces/tiny/mixed_access_pattern_trace.txt)
 
 These traces are meant to expose different cache behaviors such as scan-heavy access, reuse-friendly access, and conflict-heavy access.
 

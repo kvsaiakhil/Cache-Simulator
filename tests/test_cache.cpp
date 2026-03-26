@@ -399,24 +399,24 @@ void test_trace_runner_rejects_negative_numeric_tokens() {
 }
 
 void test_regression_scan_trace() {
-    expect_trace_case<16>("traces/scan_trace.txt", 16, 0, 16, 8, 8, 0, "scan trace");
+    expect_trace_case<16>("traces/tiny/scan_trace.txt", 16, 0, 16, 8, 8, 0, "scan trace");
 }
 
 void test_regression_thrashing_trace() {
-    expect_trace_case<16>("traces/thrashing_trace.txt", 6, 0, 6, 3, 0, 3, "thrashing trace");
+    expect_trace_case<16>("traces/tiny/thrashing_trace.txt", 6, 0, 6, 3, 0, 3, "thrashing trace");
 }
 
 void test_regression_recency_friendly_trace() {
-    expect_trace_case<16>("traces/recency_friendly_trace.txt", 12, 8, 4, 4, 0, 0,
+    expect_trace_case<16>("traces/tiny/recency_friendly_trace.txt", 12, 8, 4, 4, 0, 0,
                           "recency-friendly trace");
 }
 
 void test_regression_streaming_trace() {
-    expect_trace_case<16>("traces/streaming_trace.txt", 12, 0, 12, 12, 0, 0, "streaming trace");
+    expect_trace_case<16>("traces/tiny/streaming_trace.txt", 12, 0, 12, 12, 0, 0, "streaming trace");
 }
 
 void test_regression_mixed_access_trace() {
-    expect_trace_case<16>("traces/mixed_access_pattern_trace.txt", 13, 7, 6, 5, 1, 0,
+    expect_trace_case<16>("traces/tiny/mixed_access_pattern_trace.txt", 13, 7, 6, 5, 1, 0,
                           "mixed trace");
 }
 
